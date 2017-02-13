@@ -2,11 +2,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <assert.h>
-// For timing
-#include <sys/time.h>
-#include <sys/resource.h>
+#include <time.h>
 
-#define NUM_OF_THREADS 4
+#define NUM_OF_THREADS 2
 
 typedef struct integrate_io {
     double input_lower_limit;
@@ -82,19 +80,19 @@ double integrate_y (double upper_limit, double lower_limit, double step_size) {
 }
 
 int main (int argc, char* argv[]) {
-    // Set up timersub
-    struct rusage usage;
-    struct timeval start, end;
+    // Set up timer
+    struct timespec start_time, end_time;
+
+    // get current time
+    clock_gettime(CLOCK_MONOTONIC_RAW, &start_time);
 
     double total_area = integrate_y(1, 0, 0.0000000005);
     //printf("Approximate integral of 4 / (1 + x^2) from %lf to %lf in steps of %lf is:\n", 0.0, 1.0, 0.0000000005);
     //printf("%1.25lf\n", total_area);
     
-    getrusage(RUSAGE_SELF, &usage);
-    end = usage.ru_utime;
-
-    printf("Started at: %lu.%lus\n", start.tv_sec, start.tv_usec);
-    printf("Ended at: %lu.%lus\n", end.tv_sec, end.tv_usec);
+    // Get end time
+    clock_gettime(CLOCK_MONOTONIC_RAW, &end_time);
+    printf("Time taken: %lu.%lu s\n", (end_time.tv_sec - start_time.tv_sec), (end_time.tv_nsec - start_time.tv_nsec));
 
     return 0;
 }
