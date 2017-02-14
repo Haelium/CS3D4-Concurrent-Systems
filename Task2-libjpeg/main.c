@@ -182,6 +182,12 @@ int main (int argc, char *argv[]) {
 // D    DD  O     O  N   N N  E      
 // D  DDD    O   O   N    NN  E      
 // DDDD       OOO    N     N  EEEEEEE
+
+	// Invert colours
+	for (unsigned long x = 0; x < bmp_size; x++) {
+		bmp_buffer[x] ^= 0xFF;
+	}
+
 	
 	// Write the decompressed bitmap out to a ppm file, just to make sure 
 	// it worked. 
