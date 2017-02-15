@@ -1,11 +1,19 @@
 #include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <unistd.h>
+#include <unistd.h>		// stat(...)
 #include <syslog.h>
 #include <sys/stat.h>
 
 #include <jpeglib.h>
+
+
+// jpeglib does everything through objects called jpeg_compress_struct and jpeg_decompress_struct
+// Each of these objects has a bunch of functions which take pointers to these objects as input
+
+// jpeg_decompress_struct cheatsheet
+// Constructor:		jpeg_create_decompress(jpeg_decompress_struct* <varname>);
+// Destructor:		jpeg_destroy_decompress(jpeg_decompress_struct* <varname>);
 
 
 int main (int argc, char *argv[]) {
@@ -15,20 +23,13 @@ int main (int argc, char *argv[]) {
 	sprintf(syslog_prefix, "%s", argv[0]);
 	openlog(syslog_prefix, LOG_PERROR | LOG_PID, LOG_USER);
 
+	// Check that user has actually provided a filepath as an argument
 	if (argc != 2) {
 		fprintf(stderr, "USAGE: %s filename.jpg\n", argv[0]);
 		exit(EXIT_FAILURE);
 	}
 
-//   SSS    EEEEEEE  TTTTTTT  U     U  PPPP   
-// SS   SS  E           T     U     U  P   PP 
-// S        E           T     U     U  P    PP
-// SS       E           T     U     U  P   PP 
-//   SSS    EEEE        T     U     U  PPPP   
-//      SS  E           T     U     U  P      
-//       S  E           T     U     U  P      
-// SS   SS  E           T      U   U   P      
-//   SSS    EEEEEEE     T       UUU    P      
+	// Setup for decompression starts here
 
 	// Variables for the source jpg
 	struct stat file_info;
@@ -172,16 +173,6 @@ int main (int argc, char *argv[]) {
 	jpeg_destroy_decompress(&cinfo);
 	// And free the input buffer
 	free(jpg_buffer);
-
-// DDDD       OOO    N     N  EEEEEEE
-// D  DDD    O   O   NN    N  E      
-// D    DD  O     O  N N   N  E      
-// D     D  O     O  N N   N  E      
-// D     D  O     O  N  N  N  EEEE   
-// D     D  O     O  N   N N  E      
-// D    DD  O     O  N   N N  E      
-// D  DDD    O   O   N    NN  E      
-// DDDD       OOO    N     N  EEEEEEE
 
 	// Invert colours
 	for (unsigned long x = 0; x < bmp_size; x++) {
