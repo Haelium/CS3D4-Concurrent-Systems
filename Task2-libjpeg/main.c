@@ -57,7 +57,7 @@ int main (int argc, char *argv[]) {
 		exit(EXIT_FAILURE);
 	}
 	jpg_size = file_info.st_size;
-	jpg_buffer = (unsigned char*) malloc(jpg_size + 100);
+	jpg_buffer = (unsigned char*) malloc(jpg_size + 100);	// 100 bytes padding to avoid accidental segfault
 
 	int fd = open(argv[1], O_RDONLY);
 	i = 0;
@@ -68,15 +68,7 @@ int main (int argc, char *argv[]) {
 	}
 	close(fd);
 
-//   SSS    TTTTTTT     A     RRRR     TTTTTTT
-// SS   SS     T       A A    R   RR      T   
-// S           T      A   A   R    RR     T   
-// SS          T     A     A  R   RR      T   
-//   SSS       T     AAAAAAA  RRRR        T   
-//      SS     T     A     A  R RR        T   
-//       S     T     A     A  R   R       T   
-// SS   SS     T     A     A  R    R      T   
-//   SSS       T     A     A  R     R     T   
+	// Decompression starts here
 
 	syslog(LOG_INFO, "Proc: Create Decompress struct");
 	// Allocate a new decompress struct, with the default error handler.
