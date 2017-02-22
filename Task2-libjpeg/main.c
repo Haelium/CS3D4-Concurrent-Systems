@@ -4,8 +4,113 @@
 #include <unistd.h>
 #include <sys/stat.h>
 
+#include <pthread.h>
+#include <assert.h>
+#include <time.h>
+#include <string.h>
+
 #include <jpeglib.h>
 
+#define NUM_OF_THREADS 1
+
+typedef struct image_invert_io {
+	unsigned char* image_buffer;
+	unsigned long bmp_size;
+} image_invert_io;
+
+typedef struct image_adjust_brightness_io {
+	unsigned char* image_buffer; 
+	unsigned long bmp_size; 
+	int adjustment;
+} image_adjust_brightness_io;
+
+// Image conversion functions
+void* image_invert (void* io) {
+	unsigned char* image_buffer = ((image_invert_io*)io)->image_buffer;
+	unsigned long bmp_size = ((image_invert_io*)io)->bmp_size;
+
+	for (int x = 0; x < bmp_size; x++) {
+		image_buffer[x] ^= 0xFF;
+	}
+}
+
+void* image_adjust_brightness (void* io) {
+	unsigned char* image_buffer = ((image_adjust_brightness_io*)io)->image_buffer;
+	unsigned long bmp_size = ((image_adjust_brightness_io*)io)->bmp_size;
+	int adjustment = ((image_adjust_brightness_io*)io)->adjustment;
+
+	for (int x = 0; x < bmp_size; x++) {
+		if (image_buffer[x] + adjustment < 0) {
+			image_buffer[x] = 0;
+		} else if (image_buffer[x] + adjustment > 255) {
+			image_buffer[x] = 255;
+		} else {
+			image_buffer[x] += adjustment;
+		}
+	}
+}
+
+void par_image_invert (unsigned char* image_buffer, unsigned long bmp_size) {
+	unsigned long bytes_per_thread = bmp_size / NUM_OF_THREADS;
+	unsigned long bytes_per_thread_remainder = bmp_size % NUM_OF_THREADS;
+	// divide the image
+	image_invert_io image_invert_args[NUM_OF_THREADS];
+	pthread_t threads[NUM_OF_THREADS];
+
+	for (int x = 0; x < NUM_OF_THREADS; x++) {
+		//printf("size = %lu\n", bytes_per_thread);
+		image_invert_args[x].image_buffer = image_buffer + x * (bytes_per_thread);
+		image_invert_args[x].bmp_size = bytes_per_thread;
+	}
+	image_invert_args[NUM_OF_THREADS - 1].bmp_size += bytes_per_thread_remainder;
+
+	int rc;
+	for (int t = 0; t < NUM_OF_THREADS; t++) { 
+		//printf("Creating thread %d\n",t); 
+		rc = pthread_create(&threads[t], NULL, image_invert, (void *)(&image_invert_args[t])); 
+		if (rc) { 
+			printf("ERROR return code from pthread_create(): %d\n",rc); 
+			exit(-1); 
+		} 
+	}
+
+	// wait for threads to exit 
+	for(int t = 0; t < NUM_OF_THREADS; t++) { 
+		pthread_join(threads[t], NULL); 
+	}
+}
+
+void par_image_adjust_brightness (unsigned char* image_buffer, unsigned long bmp_size, int adjustment) {
+	unsigned long bytes_per_thread = bmp_size / NUM_OF_THREADS;
+	unsigned long bytes_per_thread_remainder = bmp_size % NUM_OF_THREADS;
+	// divide the image
+	image_adjust_brightness_io image_adjust_brightness_args[NUM_OF_THREADS];
+	pthread_t threads[NUM_OF_THREADS];
+
+	for (int x = 0; x < NUM_OF_THREADS; x++) {
+		//printf("size = %lu\n", bytes_per_thread);
+		image_adjust_brightness_args[x].image_buffer = image_buffer + x * (bytes_per_thread);
+		image_adjust_brightness_args[x].bmp_size = bytes_per_thread;
+		image_adjust_brightness_args[x].adjustment = adjustment;
+	}
+	image_adjust_brightness_args[NUM_OF_THREADS - 1].bmp_size += bytes_per_thread_remainder;
+
+	int rc;
+	for (int t = 0; t < NUM_OF_THREADS; t++) { 
+		//printf("Creating thread %d\n",t); 
+		rc = pthread_create(&threads[t], NULL, image_adjust_brightness, (void *)(&image_adjust_brightness_args[t])); 
+		if (rc) { 
+			printf("ERROR return code from pthread_create(): %d\n",rc); 
+			exit(-1); 
+		} 
+	}
+
+	// wait for threads to exit 
+	for(int t = 0; t < NUM_OF_THREADS; t++) { 
+		pthread_join(threads[t], NULL); 
+	}
+
+}
 
 // jpeglib does everything through objects called jpeg_compress_struct and jpeg_decompress_struct
 // Each of these objects has a bunch of functions which take pointers to these objects as input
@@ -19,7 +124,7 @@ int main (int argc, char *argv[]) {
 	int rc, i, j;
 
 	// Check that user has actually provided a filepath as an argument
-	if (argc != 2) {
+	if (argc < 4) {
 		fprintf(stderr, "USAGE: %s filename.jpg\n", argv[0]);
 		return 1;
 	}
@@ -112,15 +217,28 @@ int main (int argc, char *argv[]) {
 	jpeg_destroy_decompress(&cinfo);
 	free(jpg_buffer);
 
+	// Convert stuff here
+	// Set up timer
+    struct timespec start_time, end_time;
+    // get current time
+    clock_gettime(CLOCK_MONOTONIC_RAW, &start_time);
 	// Invert colours
-	for (unsigned long x = 0; x < bmp_size; x++) {
-		//printf("%c ", bmp_buffer[x]);
-		bmp_buffer[x] ^= 0xFF;	// Invert the colours in the image by flipping all bits
+	//image_invert(bmp_buffer, bmp_size);
+	//par_image_invert(bmp_buffer, bmp_size);
+	int adjust;
+	if (!strcmp(argv[3], "adjust")) {
+		adjust = atoi(argv[4]);
+		par_image_adjust_brightness(bmp_buffer, bmp_size, adjust);
+	} else {
+		par_image_invert(bmp_buffer, bmp_size);
 	}
+
+	clock_gettime(CLOCK_MONOTONIC_RAW, &end_time);
+    printf("Time taken: %lu.%lu s\n", (end_time.tv_sec - start_time.tv_sec), (end_time.tv_nsec - start_time.tv_nsec));
 	
 	// Write the decompressed bitmap out to a ppm file, just to make sure 
 	// it worked. 
-	fd = open("output2.ppm", O_CREAT | O_WRONLY, 0666);
+	fd = open(argv[2], O_CREAT | O_WRONLY, 0666);
 	char buf[1024];
 
 	rc = sprintf(buf, "P6 %d %d 255\n", width, height);
